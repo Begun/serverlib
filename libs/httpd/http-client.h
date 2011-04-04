@@ -478,7 +478,7 @@ struct http1_1 {
     typedef persistent_client_<CLIENT> client;
 
 private:
-    std::map<configure::address, std::list<client> > connects;
+    std::map<httpd::address, std::list<client> > connects;
     boost::mutex lock;
 
 public:
@@ -491,12 +491,12 @@ public:
     http1_1(unsigned int r = 0, unsigned int s = 0) : rcv_timeout(r), snd_timeout(s),
                                                       stat_size(0) {}
 
-    client get(const configure::address& a, unsigned int& sc, unsigned int& ss, 
+    client get(const httpd::address& a, unsigned int& sc, unsigned int& ss, 
                int rtimeout, int stimeout) {
 
         boost::mutex::scoped_lock l(lock);
 
-        typename std::map<configure::address, std::list<client> >::iterator i = connects.find(a);
+        typename std::map<httpd::address, std::list<client> >::iterator i = connects.find(a);
 
         if (i == connects.end() || i->second.empty()) {
             l.unlock();
@@ -531,11 +531,11 @@ public:
         }
     }
 
-    client get(const configure::address& a, unsigned int& sc, unsigned int& ss) {
+    client get(const httpd::address& a, unsigned int& sc, unsigned int& ss) {
         return get(a, sc, ss, rcv_timeout, snd_timeout);
     }
 
-    void put(const configure::address& a, client c, const typename CLIENT::fields_t& fields) {
+    void put(const httpd::address& a, client c, const typename CLIENT::fields_t& fields) {
         if (c) {
 
             typename CLIENT::fields_t::const_iterator i = fields.find("connection");
