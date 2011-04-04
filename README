@@ -1,0 +1,68 @@
+
+
+ABOUT
+-------------------------------------------------------------------
+
+This is a set of C++ header files which can be used to write and
+deploy C++ daemons with embedded support of the HTTP protocol.
+
+It is a set of simple, lean and idiomatic wrappers for standard linux
+and http functionality, rather than a "framework" in the classical
+sense of the term.
+
+
+Advantages of this library:
+
+ * Tested over years of real-world load (thousands of requests per
+   second) in a real production environment.
+
+ * Designed for 64-bit Linux and modern C++.
+
+ * Designed as a set of small, simple functions for doing common tasks
+   well. This is closer to the "Unix philosophy" of solving problems
+   rather than architecture astronautics of "frameworks".
+
+Disadvantages:
+
+ * Tested only on modern 64-bit Linux machines. Using the library
+   under any other setup will likely result in failure.
+
+
+USAGE
+-------------------------------------------------------------------
+
+Build requirements:
+
+For building the library, you will need:
+
+ * g++
+
+ * The boost libraries and headers. 
+
+
+Usage requirements:
+
+ * A modern Linux running on a modern 64-bit CPU is required.
+
+
+Compiling:
+
+This is a collection of header files which do not need to be compiled.
+
+
+Using the library: 
+
+Please see the examples in 'examples/'. 
+
+Proper API documentation is still a work in progress.
+
+
+CREDITS
+-------------------------------------------------------------------
+
+(c) 2011, ZAO "Begun"
+
+https://github.com/Begun/serverlib
+
+This library is licensed under the GNU LGPL. Please see the file LICENSE.
+
