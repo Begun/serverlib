@@ -17,6 +17,8 @@ void process(const httpd::request& req, httpd::responder& resp) {
         json = true;
     }
 
+    // All http parameters are parsed and easily accessible.
+
     if (json) {
         // Yes, this isn't really JSON. :)
         resp << "{ \n"
@@ -152,7 +154,27 @@ int main(int argc, char** argv) {
         util::daemonize(pidfile, info_log, error_log, do_daemon);
 
         clientserver::server_socket server(host, port);
-        clientserver::serve(server, service, 1000);
+
+        // Watch out, this is important!!
+        // The first two arguments are self-explanatory: a server socket object and a function object for calbacks.
+        //
+        // The other two are less obvious.
+        // 
+        // The third is 'maxconns', a maximum limit on the number of simultaneous connections.
+        // It is best set to a large value, like 1000; there is no harm in keeping connections active, and this 
+        // parameter is only useful as a measure against accidental or purposeful DDOS attacks.
+        //
+        // The fourth is 'priority', a boolean. Default is 'false', which means that the server will spawn
+        // regular old threads to process requests.
+        // A value of 'true' will cause the server to spawn real-time threads, which should balance load
+        // much more smoothly under real production loads.
+        //
+        // WARNING: Support for real-time threads must be enabled beforehand, via the shell:
+        //
+        //     $ ulimit -r 1
+        // 
+
+        clientserver::serve(server, service, 1000, false);
 
         logger::log(logger::INFO, true) << "Started server thread.";
 

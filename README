@@ -49,6 +49,9 @@ Compiling:
 
 This is a collection of header files which do not need to be compiled.
 
+*WARNING*: When linking your final app, you will need to link with the
+'boost_thread' and 'boost_system' libraries!
+
 
 Using the library: 
 
