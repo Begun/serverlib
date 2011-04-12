@@ -93,7 +93,7 @@ void service(clientserver::service_buffer sock) {
             logger::log(logger::ERROR) << "ERROR in writing response: unknown error.";
         }
 
-        // HTTP/1.0: Закрываем соединение.
+        // HTTP/1.0: connection should be closed.
         if (resp.should_close) break;
     }
 }
