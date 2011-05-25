@@ -27,33 +27,46 @@
 namespace clientserver {
 
 
+struct raii_addrinfo {
+    struct addrinfo* a;
+    raii_addrinfo(struct addrinfo* _a) : a(_a) {}
+
+    ~raii_addrinfo() {
+        if (a != NULL) ::freeaddrinfo(a);
+    }
+};
 
 inline std::string resolve(const std::string& hostname) {
-    struct hostent result;
-    struct hostent* tmpret;
-    char buffer[128];
-    int h_errnop;
-    struct in_addr in;
 
-    if (::gethostbyname_r(hostname.c_str(), &result, buffer, sizeof(buffer), &tmpret, &h_errnop) != 0 ||
-	tmpret == NULL) {
+    struct addrinfo* result = NULL;
 
-	errno = h_errnop;
-	throw error::system_error("Could not gethostbyname_r() : ");
+    int err = ::getaddrinfo(hostname.c_str(), NULL, NULL, &result);
+
+    if (err) {
+        throw std::runtime_error("getaddrinfo() failed for " + hostname + " : " + files::format(err));
     }
 
-    if (result.h_addr_list[0] == NULL) {
-	throw std::runtime_error("Could not gethostbyname_r() : empty result");
-    }
+    raii_addrinfo _ai(result);
 
-    in.s_addr = *(u_long*)result.h_addr_list[0];
+    for (struct addrinfo* i = result; i != NULL; i = i->ai_next) {
 
-    if (::inet_ntop(AF_INET, (void*)(&in), buffer, sizeof(buffer)) == NULL) 
-	throw error::system_error("could not inet_ntop()");
+        if (i->ai_family != PF_INET || i->ai_socktype != SOCK_STREAM) {
+            continue;
+        }
 
-    return buffer;
+        struct sockaddr_in* sin = (sockaddr_in*)(i->ai_addr);
+
+        char buffer[128];
+
+        if (::inet_ntop(AF_INET, (void*)(&(sin->sin_addr)), buffer, sizeof(buffer)) == NULL)
+            throw error::system_error("could not inet_ntop() while resolving " + hostname);
+
+        return buffer;
+    }  
+    
+    throw std::runtime_error("getaddrinfo() for " + hostname + " : empty result");
 }
-
+   
 
 // Линуксно-специфично, я думаю.
 
