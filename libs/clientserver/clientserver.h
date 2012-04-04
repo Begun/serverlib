@@ -74,6 +74,7 @@ protected:
         error::system_error err(msg);
         ::shutdown(fd, SHUT_RDWR);
         ::close(fd);
+        fd = -1;
         throw err;
     }
 
@@ -83,6 +84,7 @@ public:
     unknown_socket(int f) : fd(f) {}
 
     ~unknown_socket() {
+        if (fd < 0) return;
         ::shutdown(fd, SHUT_RDWR);
         ::close(fd);
     }
