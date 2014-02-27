@@ -6,6 +6,8 @@
 
 #include "clientserver/clientserver.h"
 
+#include "files/logger.h"
+
 #include <sys/socket.h>
 #include <sys/un.h>
 
@@ -30,7 +32,7 @@ public:
         ::strncpy(addr.sun_path, path.data(), path.size());
 
 	if (::connect(fd, (struct sockaddr*)&addr, sizeof(addr))) 
-            teardown("could not connect() : ");
+            teardown((files::fmt() << "could not connect() (" << path << ") : ").data);
 
 
 	if (rcv_timeout) {
@@ -40,7 +42,7 @@ public:
 	    tv.tv_usec = (rcv_timeout % 1000) * 1000;
 
 	    if (::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(struct timeval)) < 0)
-                std::cerr << "WARNING: setsockopt(SO_RCVTIMEO) failed. (" << rcv_timeout << ")" << std::endl;
+                logger::log(logger::ERROR) << "WARNING: setsockopt(SO_RCVTIMEO) failed. (" << rcv_timeout << ")";
 	}
 
         if (snd_timeout) {
@@ -49,7 +51,7 @@ public:
             tv.tv_usec = (snd_timeout % 1000) * 1000;
 
             if (::setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(struct timeval)) < 0)
-                std::cerr << "WARNING: setsockopt(SO_SNDTIMEO) failed. (" << snd_timeout << ")" << std::endl;
+                logger::log(logger::ERROR) << "WARNING: setsockopt(SO_SNDTIMEO) failed. (" << snd_timeout << ")";
         }
 
     }

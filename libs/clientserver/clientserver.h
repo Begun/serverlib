@@ -10,7 +10,6 @@
 #include <netdb.h>
 
 #include <sys/ioctl.h>
-#include <stropts.h>
 #include <net/if.h>
 #include <netinet/tcp.h>
 
@@ -22,8 +21,6 @@
 #include <time.h>
 #include <errno.h>
 
-#include <iostream>
-
 #include <string>
 #include <vector>
 
@@ -33,6 +30,8 @@
 
 
 #include "error/error.h"
+#include "files/files_format.h"
+#include "files/logger.h"
 
 #include "clientserver_base.h"
 
@@ -204,7 +203,7 @@ protected:
         // Опционально, но должно улучшить диагностику.
         int is_true = 1;
         if (::setsockopt(fd, SOL_TCP, TCP_NODELAY, &is_true, sizeof(is_true)) < 0)
-            std::cerr << "WARNING: could not setsockopt(TCP_NODELAY) : " << error::strerror() << std::endl;
+            logger::log(logger::ERROR) << "WARNING: could not setsockopt(TCP_NODELAY) : " << error::strerror();
             //throw error::system_error("could not setsockopt(TCP_NODELAY) : ");
 
         if (rcv_timeout) {
@@ -213,16 +212,16 @@ protected:
             tv.tv_sec = rcv_timeout / 1000;
             tv.tv_usec = (rcv_timeout % 1000) * 1000;
             if (::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(struct timeval)) < 0)
-                std::cerr << "WARNING: setsockopt(SO_RCVTIMEO) failed. (" << rcv_timeout << ")" << std::endl;
+                logger::log(logger::ERROR) << "WARNING: setsockopt(SO_RCVTIMEO) failed. (" << rcv_timeout << ")";
                 //throw error::system_error("could not setsockopt(SO_RCVTIMEO) : ");
 
             if (tv.tv_sec) {
 
                 if (::setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &is_true, sizeof(is_true)) < 0)
-                    std::cerr << "WARNING: setsockopt(SO_KEEPALIVE) failed." << std::endl;
+                    logger::log(logger::ERROR) << "WARNING: setsockopt(SO_KEEPALIVE) failed.";
 
                 if (::setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &(tv.tv_sec), sizeof(tv.tv_sec)) < 0)
-                    std::cerr << "WARNING: setsockopt(TCP_KEEPIDLE) failed. " << rcv_timeout << ")" << std::endl;
+                    logger::log(logger::ERROR) << "WARNING: setsockopt(TCP_KEEPIDLE) failed. " << rcv_timeout << ")";
 
             }
         }
@@ -233,7 +232,7 @@ protected:
             tv.tv_usec = (snd_timeout % 1000) * 1000;
 
             if (::setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(struct timeval)) < 0)
-                std::cerr << "WARNING: setsockopt(SO_SNDTIMEO) failed. (" << snd_timeout << ")" << std::endl;
+                logger::log(logger::ERROR) << "WARNING: setsockopt(SO_SNDTIMEO) failed. (" << snd_timeout << ")";
         }
     }
 
@@ -252,7 +251,7 @@ protected:
             int tmp = ::pthread_setschedparam(::pthread_self(), SCHED_RR, &param);
 
             if (tmp != 0) {
-                std::cerr << "Could not pthread_setschedparam() : " << tmp << std::endl;
+                logger::log(logger::FATAL) << "Could not pthread_setschedparam() : " << tmp;
                 abort();
             }
         }
@@ -298,10 +297,10 @@ public:
 
         /* TODO: select the address properly, based on interface names. */
         if (::inet_pton(AF_INET, host.c_str(), (void*)&addr.sin_addr) <= 0)
-            teardown("could not inet_pton() : ");
+            teardown((files::fmt() << "could not inet_pton() (" << host << ") : ").data);
 
         if (::bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0)
-            teardown("could not bind() : ");
+            teardown((files::fmt() << "could not bind() (" << host << ":" << port << ") : ").data);
 
         if (::listen(fd, 1024) < 0)
             teardown("could not listen() : ");
@@ -320,7 +319,7 @@ public:
                 int client = ::accept(fd, NULL, NULL);
 
                 if (client < 0) {
-                    break;
+                    throw error::system_error("could not accept() : ");
                 }
 
                 if (maxconns > 0 &&
@@ -336,10 +335,10 @@ public:
 
 
             } catch (std::exception& e) {
-                std::cerr << "ERROR in serving : " << e.what() << std::endl;
+                logger::log(logger::ERROR) << "ERROR in serving : " << e.what();
 
             } catch (...) {
-                std::cerr << "UNKNOWN ERROR in serving" << std::endl;
+                logger::log(logger::ERROR) << "UNKNOWN ERROR in serving";
             }
         }
     }
@@ -355,6 +354,18 @@ typedef boost::shared_ptr<buffer<service_socket> > service_buffer;
 
 class client_socket : public unknown_socket {
 public:
+
+    void set_rcv_timeout(unsigned int rcv_timeout)
+    {
+        struct timeval tv;
+        tv.tv_sec = rcv_timeout / 1000;
+        tv.tv_usec = (rcv_timeout % 1000) * 1000;
+
+        if (::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(struct timeval)) < 0)
+            logger::log(logger::ERROR) << "WARNING: setsockopt(SO_RCVTIMEO) failed. (" << rcv_timeout << ")";
+        //throw error::system_error("could not setsockopt(SO_RCVTIMEO) : ");
+    }
+
     client_socket(const std::string& host, int port,
                   unsigned int rcv_timeout, unsigned int snd_timeout) : unknown_socket(-1) {
 
@@ -376,26 +387,21 @@ public:
             tv.tv_usec = (snd_timeout % 1000) * 1000;
 
             if (::setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(struct timeval)) < 0)
-                std::cerr << "WARNING: setsockopt(SO_SNDTIMEO) failed. (" << snd_timeout << ")" << std::endl;
+                logger::log(logger::ERROR) << "WARNING: setsockopt(SO_SNDTIMEO) failed. (" << snd_timeout << ")";
         }
 
         if (rcv_timeout) {
 
-            struct timeval tv;
-            tv.tv_sec = rcv_timeout / 1000;
-            tv.tv_usec = (rcv_timeout % 1000) * 1000;
-
-            if (::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(struct timeval)) < 0)
-                std::cerr << "WARNING: setsockopt(SO_RCVTIMEO) failed. (" << rcv_timeout << ")" << std::endl;
-            //throw error::system_error("could not setsockopt(SO_RCVTIMEO) : ");
+            set_rcv_timeout(rcv_timeout);
 
             if (::setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &is_true, sizeof(is_true)) < 0)
-                std::cerr << "WARNING: setsockopt(SO_KEEPALIVE) failed." << std::endl;
+                logger::log(logger::ERROR) << "WARNING: setsockopt(SO_KEEPALIVE) failed.";
 
-            if (tv.tv_sec) {
+            const long rcv_timeout_sec = rcv_timeout / 1000;
+            if (rcv_timeout_sec) {
 
-                if (::setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &(tv.tv_sec), sizeof(tv.tv_sec)) < 0)
-                    std::cerr << "WARNING: setsockopt(TCP_KEEPIDLE) failed. " << rcv_timeout << ")" << std::endl;
+                if (::setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &rcv_timeout_sec, sizeof(rcv_timeout_sec)) < 0)
+                    logger::log(logger::ERROR) << "WARNING: setsockopt(TCP_KEEPIDLE) failed. " << rcv_timeout << ")";
 
             }
         }
@@ -406,10 +412,10 @@ public:
         addr.sin_family = AF_INET;
         addr.sin_port = htons(port);
         if (::inet_pton(AF_INET, host.c_str(), (void*)&addr.sin_addr) <= 0)
-            teardown("could not inet_pton() : ");
+            teardown((files::fmt() << "could not inet_pton() (" << host << ") : ").data);
 
         if (::connect(fd, (struct sockaddr*)&addr, sizeof(addr)))
-            teardown("could not connect() : ");
+            teardown((files::fmt() << "could not connect() (" << host << ":" << port << ") : ").data);
 
     }
 };

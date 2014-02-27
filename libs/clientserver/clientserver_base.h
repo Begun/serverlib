@@ -131,6 +131,16 @@ public:
     size_t bytes_scanned() const { 
         return scanned;
     }
+
+    off_t tell() const {
+        return m_obj->lseek(0, SEEK_CUR) - (m_end-m_cur);
+    }
+
+    off_t lseek(off_t off) {
+        off_t ofset = m_obj->lseek(off, SEEK_SET);
+        flush();
+        return ofset;
+    }
 };
 
 

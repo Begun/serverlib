@@ -27,6 +27,7 @@
 namespace clientserver {
 
 
+
 struct raii_addrinfo {
     struct addrinfo* a;
     raii_addrinfo(struct addrinfo* _a) : a(_a) {}
@@ -35,6 +36,9 @@ struct raii_addrinfo {
         if (a != NULL) ::freeaddrinfo(a);
     }
 };
+
+
+
 
 inline std::string resolve(const std::string& hostname) {
 
