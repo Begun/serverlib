@@ -284,9 +284,6 @@ template <typename T,typename A,typename B> struct saver<std::deque<T,A>,B > {
 template <typename K,typename V,typename L, typename A,typename B> struct saver<std::map<K,V,L,A>,B > {
     inline void operator()(B& buf, const std::map<K,V,L,A>& t) { save_stl_(buf, t); } };
 
-template <typename K,typename V,typename E, typename L, typename A,typename B> struct saver<std::tr1::unordered_map<K,V,E,L,A>,B > {
-    inline void operator()(B& buf, const std::tr1::unordered_map<K,V,E,L,A>& t) { save_stl_(buf, t); } };
-
 template <typename K,typename V,typename E, typename L, typename A,typename B> struct saver<std::unordered_map<K,V,E,L,A>,B > {
     inline void operator()(B& buf, const std::unordered_map<K,V,E,L,A>& t) { save_stl_(buf, t); } };
 
