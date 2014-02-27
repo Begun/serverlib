@@ -1,7 +1,20 @@
 #ifndef __FILES_SERIALIZATION_LOAD_H
 #define __FILES_SERIALIZATION_LOAD_H
 
+#include "files/serialization_save.h"
+#include "files/files_scan.h"
+
 #include "util/type_to_typename.h"
+
+#include <unordered_set>
+#include <unordered_map>
+#include <stdexcept>
+#include <string>
+#include <vector>
+#include <queue>
+#include <list>
+#include <map>
+#include <set>
 
 
 
@@ -164,12 +177,32 @@ inline void load_stl_map_(B buf, T& t, unsigned int version) {
 }
 
 
+template <typename B, typename T, size_t  N> struct loader<T [N],B> {
+    inline void operator()(B buf, T (&t)[N], unsigned int version) {
+        for(auto i = 0; i < N; ++i) {
+            load(buf, t[i]);
+        }
+    }
+};
+
+template <typename B, typename T, size_t N> struct loader<std::array<T,N>,B> {
+    inline void operator()(B& buf, std::array<T,N>& t, unsigned int version) {
+        for(auto& v : t) {
+            load(buf, v);
+        }
+    }
+};
+
 template <typename B, typename T, typename A> struct loader<std::vector<T,A>,B> {
     inline void operator()(B buf, std::vector<T,A>& t, unsigned int version) { load_stl_(buf, t, version); }
 };
 
 template <typename B, typename T, typename L, typename A> struct loader<std::set<T,L,A>,B> {
     inline void operator()(B buf, std::set<T,L,A>& t, unsigned int version) { load_stl_(buf, t, version); }
+};
+
+template <typename B, typename T, typename L, typename A> struct loader<std::unordered_set<T,L,A>,B> {
+    inline void operator()(B buf, std::unordered_set<T,L,A>& t, unsigned int version) { load_stl_(buf, t, version); }
 };
 
 template <typename B, typename T, typename L, typename A> struct loader<std::multiset<T,L,A>,B> {
@@ -188,16 +221,13 @@ template <typename B, typename T, typename A> struct loader<std::deque<T,A>,B> {
     inline void operator()(B buf, std::deque<T,A>& t, unsigned int version) { load_stl_(buf, t, version); }
 };
 
-
 template <typename B, typename K, typename V, typename L, typename A> struct loader<std::map<K,V,L,A>,B> {
     inline void operator()(B buf, std::map<K,V,L,A>& t, unsigned int version) { load_stl_map_(buf, t, version); }
 };
 
-
-template <typename B, typename K, typename V, typename E, typename L, typename A> struct loader<std::tr1::unordered_map<K,V,E,L,A>,B> {
-    inline void operator()(B buf, std::tr1::unordered_map<K,V,E,L,A>& t, unsigned int version) { load_stl_map_(buf, t, version); }
+template <typename B, typename K, typename V, typename E, typename L, typename A> struct loader<std::unordered_map<K,V,E,L,A>,B> {
+    inline void operator()(B buf, std::unordered_map<K,V,E,L,A>& t, unsigned int version) { load_stl_map_(buf, t, version); }
 };
-
 
 
 

@@ -11,6 +11,20 @@
 
 #include <boost/noncopyable.hpp>
 
+#include "files/files_format.h"
+
+#include <unordered_set>
+#include <unordered_map>
+#include <cstring>
+#include <utility>
+#include <string>
+#include <vector>
+#include <queue>
+#include <list>
+#include <map>
+#include <set>
+
+
 namespace serialization {
 
 
@@ -37,9 +51,6 @@ public:
     const size_t max_buf_size;
 
     saver_policy(B b, size_t m, bool profile = false) : m_output(b), max_buf_size(m) {}
-
-    template <typename T>
-    inline void tick(const T& t, size_t s = 0) { }
 
     inline void check() {
 	if (data.size() >= max_buf_size) {
@@ -73,7 +84,6 @@ struct saver_string_policy {
 
     std::string data;
 
-    template <typename T> inline void tick(const T&, size_t s = 0) {}
     inline void check() {}
     inline void flush() {}
 };
@@ -89,7 +99,6 @@ struct saver_string_out_policy {
 
     saver_string_out_policy(std::string& b) : data(b) {}
 
-    template <typename T> inline void tick(const T&, size_t s = 0) {}
     inline void check() {}
     inline void flush() {}
 };
@@ -127,7 +136,7 @@ inline void save(B& buf, const T& t) {
 #define SAVE_NUMERIC(T) \
     template <typename B> struct save_<T,B> { \
 	inline void operator()(B& buf, const T t) { \
-	    buf.tick(t); files::format(buf.data, t); files::format(buf.data, '\n'); buf.check(); } }
+            files::format(buf.data, t); files::format(buf.data, '\n'); buf.check(); } }
 
 SAVE_NUMERIC(short);
 SAVE_NUMERIC(unsigned short);
@@ -149,7 +158,6 @@ SAVE_NUMERIC(long double);
 template <typename BU,typename A,typename B>
 struct save_<std::pair<A,B>, BU> {
     inline void operator()(BU& buf, const std::pair<A,B>& t) {
-	buf.tick(t);
 	save(buf, t.first);
 	save(buf, t.second);
     }
@@ -171,7 +179,6 @@ template <> struct type_version<std::string> {
 
 template <typename B> struct saver<std::string, B> {
     inline void operator()(B& buf, const std::string& t) {
-	buf.tick(t, t.size());
 	save(buf, t.size());
 	buf.data += t;
 	buf.check();
@@ -185,7 +192,6 @@ template <> struct type_version<char*> {
 template <typename B> struct saver<char*,B> {
     inline void operator()(B& buf, const char* t) {
 	size_t len = ::strlen(t);
-	buf.tick(t, len);
 	save(buf, len);
 	buf.data += t;
 	buf.check();
@@ -204,11 +210,20 @@ inline void save_stl_(B& buf, const T& t) {
 }
 
 
+template <typename T, size_t N> struct type_version<T [N]> {
+    inline unsigned int operator()(const T (&t)[N]) { return 0; } };
+
+template <typename T, size_t N> struct type_version<std::array<T,N> > {
+     inline unsigned int operator()(const std::array<T,N>& ) { return 0; } };
+
 template <typename T, typename A> struct type_version<std::vector<T,A> > {
     inline unsigned int operator()(const std::vector<T>& t) { return 0; } };
 
 template <typename T, typename L, typename A> struct type_version<std::set<T,L,A> > {
     inline unsigned int operator()(const std::set<T,L,A>& t) { return 0; } };
+
+template <typename T, typename L, typename A> struct type_version<std::unordered_set<T,L,A> > {
+    inline unsigned int operator()(const std::unordered_set<T,L,A>& t) { return 0; } };
 
 template <typename T, typename L, typename A> struct type_version<std::multiset<T,L,A> > {
     inline unsigned int operator()(const std::multiset<T,L,A>& t) { return 0; } };
@@ -225,15 +240,34 @@ template <typename T, typename A> struct type_version<std::deque<T,A> > {
 template <typename K,typename V, typename L, typename A> struct type_version<std::map<K,V,L,A> > {
     inline unsigned int operator()(const std::map<K,V,L,A>& t) { return 0; } };
 
-template <typename K,typename V, typename L, typename A> struct type_version<std::tr1::unordered_map<K,V,L,A> > {
-    inline unsigned int operator()(const std::tr1::unordered_map<K,V,L,A>& t) { return 0; } };
+template <typename K,typename V, typename L, typename A> struct type_version<std::unordered_map<K,V,L,A> > {
+    inline unsigned int operator()(const std::unordered_map<K,V,L,A>& t) { return 0; } };
 
+
+template <typename T, typename B, size_t N> struct saver<T [N], B> {
+    inline void operator()(B& buf, const T (&t)[N]) {
+        for(auto i = 0; i < N; ++i) {
+            save(buf, t[i]);
+        }
+    }
+};
+
+template <typename T, size_t N, typename B> struct saver<std::array<T,N>,B > {
+    inline void operator()(B& buf, const std::array<T,N>& t) {
+        for(auto& v : t) {
+            save(buf, v);
+        }
+    }
+};
 
 template <typename T, typename A, typename B> struct saver<std::vector<T,A>,B > {
     inline void operator()(B& buf, const std::vector<T,A>& t) { save_stl_(buf, t); } };
 
 template <typename T,typename L, typename A,typename B> struct saver<std::set<T,L,A>,B > {
     inline void operator()(B& buf, const std::set<T,L,A>& t) { save_stl_(buf, t); } };
+
+template <typename T,typename L, typename A,typename B> struct saver<std::unordered_set<T,L,A>,B > {
+    inline void operator()(B& buf, const std::unordered_set<T,L,A>& t) { save_stl_(buf, t); } };
 
 template <typename T,typename L, typename A, typename B> struct saver<std::multiset<T,L,A>,B > {
     inline void operator()(B& buf, const std::multiset<T,L,A>& t) { save_stl_(buf, t); } };
@@ -253,6 +287,8 @@ template <typename K,typename V,typename L, typename A,typename B> struct saver<
 template <typename K,typename V,typename E, typename L, typename A,typename B> struct saver<std::tr1::unordered_map<K,V,E,L,A>,B > {
     inline void operator()(B& buf, const std::tr1::unordered_map<K,V,E,L,A>& t) { save_stl_(buf, t); } };
 
+template <typename K,typename V,typename E, typename L, typename A,typename B> struct saver<std::unordered_map<K,V,E,L,A>,B > {
+    inline void operator()(B& buf, const std::unordered_map<K,V,E,L,A>& t) { save_stl_(buf, t); } };
 
 
 // Обертка...
@@ -261,8 +297,6 @@ template <typename T,typename B>
 struct save_ {
 
     inline void operator()(B& buf, const T& t) {
-	buf.tick(t);
-
 	save(buf, type_version<T>()(t));
 	saver<T,B>()(buf, t);
     }

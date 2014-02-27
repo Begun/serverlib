@@ -4,6 +4,7 @@
 #include <time.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <sys/syscall.h>
 
 #include <boost/thread.hpp>
 #include <boost/thread/tss.hpp>
@@ -129,7 +130,8 @@ private:
         if (fd1 < 0)
             throw error::system_error(("could not open() in logger: " + name + " : ").c_str());
 
-        ::dup2(fd1, fd);
+        if (::dup2(fd1, fd) < 0)
+            throw error::system_error("could not dup2: " + files::format(fd1) + " " + files::format(fd));
     
         if (fd1 != fd)
             ::close(fd1);
@@ -447,7 +449,7 @@ public:
         files::format(data, "  ");
         files::format(data, level.name);
         files::format(data, " [");
-        files::format(data, ::pthread_self());
+        files::format(data, syscall(SYS_gettid));
         files::format(data, "]>  ");
     }
 
@@ -469,10 +471,28 @@ public:
 
       files::format(data, "\n");
 
+      unsigned int tries = 0;
+
+      // Calling dup2() and write() in parallel sometimes causes write() to fail with an EBADF.
+
+      while (1) {
+
+          try {
+
       lsp.info << data;
 
       if (level.is_error) {
           lsp.error << data;
+      }
+
+              break;
+
+          } catch (std::exception& e) {
+              tries++;
+
+              if (tries > 1)
+                  throw;
+          }
       }
 
       lsp.try_to_rotate(loglevels::get_rotation_freq(), loglevels::get_num_logfiles(), loglevels::get_logfile_size());

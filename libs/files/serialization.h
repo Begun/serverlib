@@ -8,8 +8,8 @@
 #include <string>
 #include <deque>
 
-#include <tr1/unordered_map>
-
+#include <unordered_map>
+#include <unordered_set>
 
 #include "files/files.h"
 

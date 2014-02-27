@@ -70,7 +70,7 @@ struct __init<mpl_::void_> {
 template <>
 struct __init<boost::blank> {
     template <typename VAR, typename BUF>
-    void operator()(BUF& buf, VAR& v) {}
+    void operator()(BUF& buf, VAR& v) { v = boost::blank(); }
 };
 
 

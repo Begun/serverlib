@@ -2,8 +2,13 @@
 #define __FILES_FILES_BASE_H
 
 
+#include "clientserver/clientserver_base.h"
 #include "error/error.h"
 
+#include <boost/shared_ptr.hpp>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 namespace files {
 
@@ -42,6 +47,14 @@ public:
 	
 	return tmp;
     }
+
+    off_t lseek(off_t off, int whence) {
+        int i = ::lseek(fd, off, whence);
+        if (i < 0) {
+            throw std::runtime_error("Could not lseek()!");
+        }
+        return i;
+    }
 };
 
 
@@ -57,6 +70,17 @@ inline file open(const std::string& f, bool onlynew = false, bool readonly = fal
 
     if (fd < 0) 
 	throw error::system_error(("could not open() : " + f + " : ").c_str());
+
+    boost::shared_ptr<file_> s(new file_(fd));
+    return file(new clientserver::buffer<file_>(s));
+}
+
+ inline file create(const std::string& f, bool onlynew = false) {
+
+    int fd = ::open(f.c_str(), (O_RDWR | O_TRUNC | O_CREAT | O_NOATIME | (onlynew ? O_EXCL : 0)), 0660);
+
+    if (fd < 0)
+        throw error::system_error(("could not open() : " + f + " : ").c_str());
 
     boost::shared_ptr<file_> s(new file_(fd));
     return file(new clientserver::buffer<file_>(s));

@@ -1,6 +1,8 @@
 #ifndef __FILES_FILES_FORMAT_H
 #define __FILES_FILES_FORMAT_H
 
+#include <type_traits>
+
 #include <math.h>
 #include <sstream>
 
@@ -68,10 +70,14 @@ inline std::string& format_numeric(std::string& out, T t, int base = 10, int pad
 
 // HACK.
 
+template <typename T> inline T __round(T);
+
+template <> inline float       __round(float       x) { return roundf(x); }
+template <> inline double      __round(double      x) { return round(x);  }
+template <> inline long double __round(long double x) { return roundl(x); }
+
 template <typename T>
 inline std::string& format_real(std::string& out, T t, const char* /*fmt_*/, int round = 5) {
-
-    static const char* base10 = "0123456789";
 
     if (isnan(t)) {
         out += "nan";
@@ -102,42 +108,23 @@ inline std::string& format_real(std::string& out, T t, const char* /*fmt_*/, int
 
     if (round > 63) round = 63;
 
-    int ro0 = 0;
-    char buff[65];
+    long whole = 1;
 
-    while (ro0 <= round) {
+    for (int i = 0; i < round; ++i) {
         t0 *= 10;
-
-        long tmp = (long)t0;
-
-        buff[ro0] = base10[tmp];
-        t0 -= tmp;
-        ro0++;
+        whole *= 10;
     }
 
-    bool carry = false;
-    for (int i = round; i >= 0; i--) {
-        if (buff[i] < '9') {
-            if (buff[i+1] >= '5' || carry) {
-                buff[i]++;
-            }
-            carry = false;
-            break;
-        } else {
-            buff[i] = '0';
-            carry = true;
-        }
-    }    
+    long f = (long)__round(t0);
 
-    if (carry) 
+    if (f >= whole) {
         l++;
+       f -= whole;
+    }
 
     format_numeric(out, l);
     out += '.';
-
-    for (int i = 0; i < round; i++) {
-        out += buff[i];
-    }
+    format_numeric(out, f, 10, round);
 
     return out;
 }
@@ -145,6 +132,71 @@ inline std::string& format_real(std::string& out, T t, const char* /*fmt_*/, int
 
 // Тут порядок struct fmt и format() важен почему-то
 
+template <typename T> struct format_;
+
+template <> struct format_<short> 
+{ std::string& operator()(std::string& out, short t) { return format_numeric(out, t); } };
+
+template <> struct format_<unsigned short> 
+{ std::string& operator()(std::string& out, unsigned short t) { return format_numeric(out, t); } };
+
+template <> struct format_<int> 
+{ std::string& operator()(std::string& out, int t) { return format_numeric(out, t); } };
+
+template <> struct format_<unsigned int> 
+{ std::string& operator()(std::string& out, unsigned int t) { return format_numeric(out, t); } };
+
+template <> struct format_<long> 
+{ std::string& operator()(std::string& out, long t) { return format_numeric(out, t); } };
+
+template <> struct format_<unsigned long> 
+{ std::string& operator()(std::string& out, unsigned long t) { return format_numeric(out, t); } };
+
+template <> struct format_<long long> 
+{ std::string& operator()(std::string& out, long long t) { return format_numeric(out, t); } };
+
+template <> struct format_<unsigned long long> 
+{ std::string& operator()(std::string& out, unsigned long long t) { return format_numeric(out, t); } };
+
+template <> struct format_<std::string> 
+{ std::string& operator()(std::string& out, const std::string& t) { out += t; return out; } };
+
+template <> struct format_<char*> 
+{ std::string& operator()(std::string& out, const char* t) { out += t; return out; } };
+
+template <> struct format_<const char*> 
+{ std::string& operator()(std::string& out, const char* t) { out += t; return out; } };
+
+template <> struct format_<char> 
+{ std::string& operator()(std::string& out, char t) { out += t; return out; } };
+
+template <> struct format_<unsigned char> 
+{ std::string& operator()(std::string& out, unsigned char t) { out += t; return out; } };
+
+template <> struct format_<bool> 
+{ std::string& operator()(std::string& out, bool t) { out += (t ? 'T' : 'F'); return out; } };
+
+template <> struct format_<float> 
+{ std::string& operator()(std::string& out, float t) { return format_real(out, t, "%.*g"); } };
+
+template <> struct format_<double> 
+{ std::string& operator()(std::string& out, double t) { return format_real(out, t, "%.*g"); } };
+
+template <> struct format_<long double> 
+{ std::string& operator()(std::string& out, long double t) { return format_real(out, t, "%.*lg"); } };
+
+
+template <typename T>
+inline std::string format (T const &t) {
+    std::string tmp; 
+    format_<typename std::decay<T>::type>()(tmp, t);
+    return tmp;
+}
+
+template <typename T>
+inline std::string& format (std::string& out, T const &t) {
+    return format_<typename std::decay<T>::type>()(out, t);
+}
 
 struct fmt {
     std::string data;
@@ -168,32 +220,6 @@ struct fmt_out {
 	return *this; 
     }
 };
-
-
-inline std::string& format(std::string& out, short t) { return format_numeric(out, t); }
-inline std::string& format(std::string& out, unsigned short t) { return format_numeric(out, t); }
-inline std::string& format(std::string& out, int t) { return format_numeric(out, t); }
-inline std::string& format(std::string& out, unsigned int t) { return format_numeric(out, t); }
-inline std::string& format(std::string& out, long t) { return format_numeric(out, t); }
-inline std::string& format(std::string& out, unsigned long t) { return format_numeric(out, t); }
-inline std::string& format(std::string& out, long long t) { return format_numeric(out, t); }
-inline std::string& format(std::string& out, unsigned long long t) { return format_numeric(out, t); }
-
-inline std::string& format(std::string& out, const std::string& t) { out += t; return out; }
-inline std::string& format(std::string& out, const char* t) { out += t; return out; }
-inline std::string& format(std::string& out, char* t) { out += t; return out; }
-inline std::string& format(std::string& out, char t) { out += t; return out; }
-inline std::string& format(std::string& out, unsigned char t) { out += t; return out; }
-
-inline std::string& format(std::string& out, bool t) { out += (t ? 'T' : 'F'); return out; }
-
-inline std::string& format(std::string& out, float t) { return format_real(out, t, "%.*g"); }
-inline std::string& format(std::string& out, double t) { return format_real(out, t, "%.*g"); }
-inline std::string& format(std::string& out, long double t) { return format_real(out, t, "%.*lg"); }
-
-template <typename T>
-inline std::string format (T const &t) {std::string tmp; format (tmp, t); return tmp;}
-
 
 template <typename T>
 inline std::string& format_legacy_cpp(std::string& out, const T& t) {

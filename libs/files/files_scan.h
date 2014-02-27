@@ -1,6 +1,13 @@
 #ifndef __FILES_FILES_SCAN_H
 #define __FILES_FILES_SCAN_H
 
+#include "files/files_base.h"
+
+#include <boost/shared_ptr.hpp>
+
+#include <algorithm>
+#include <string>
+#include <vector>
 
 namespace files {
 
@@ -64,6 +71,29 @@ public:
         std::copy(s.begin() + *pos, s.begin() + *pos + out.size(), out.begin());
         (*pos) += out.size();
         return *this;
+    }
+
+    bool optional_read(unsigned char match) {
+
+        if (terminator >= 0 && *pos == s.size()) {
+            if (match == terminator) {
+                (*pos)++;
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        if (*pos >= s.size()) {
+            throw eof_exception();
+        }
+
+        if (s[*pos] == match) {
+            (*pos)++;
+            return true;
+        }
+
+        return false;
     }
 
     // Not supported!
