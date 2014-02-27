@@ -1,24 +1,35 @@
 #ifndef __HTTP_CLIENT_H
 #define __HTTP_CLIENT_H
 
-#include <sys/epoll.h>
-#include <errno.h>
 
 #include "files/logger.h"
 #include "files/serialization.h"
+#include "addresses.h"
 #include "lockfree/aux_.h"
 
-#include "addresses.h"
 #include "httpd.h"
+#include <sys/epoll.h>
+#include <errno.h>
 
-
+#include <string>
+#include <vector>
+#include <list>
+#include <map>
 
 namespace httpd {
 
-struct response_code_error: public std::runtime_error {
-    response_code_error(const std::string& head, const std::string &code="200")
-        : std::runtime_error("Error in HTTP response. Expected code is \"" + code + "\", got head: \"" + head + "\"")
+struct response_code_error: public std::runtime_error 
+{
+    response_code_error(const std::string& head, const std::string& result_code, const std::string &code="200")
+        : std::runtime_error("Error in HTTP response. Expected code is \"" + code + "\", got head: \"" + head + "\""),
+        m_result_code(result_code)
     {}
+
+    std::string result() const { return m_result_code; }
+    ~response_code_error() throw () {}
+
+private:
+    std::string m_result_code;
 };
 
 class client {
@@ -112,7 +123,7 @@ public:
     static void check_reply_head(const std::string& head, const std::string& code = "200") {
         if (head.compare(0, 5, "HTTP/", 5) != 0 ||
             head.compare(9, 3, code.c_str(), 3) != 0) {
-            throw response_code_error(head, code);
+            throw response_code_error(head, head.substr(9, 3), code);
         }
     }
 };
@@ -243,34 +254,8 @@ protected:
 
 	std::string req_str;
 
-        // HACK.
-
-        if (m_true_http) {
-
             // Проксируем _реальный_ запрос, как есть.
             unparse_request(req, req_str, poison);
-
-        } else {
-
-            // Проксируем минимальный http/1.1
-
-            req_str += req.method;
-            req_str += ' ';
-            req_str += req.path;
-
-            if (req.query_raw.size() > 0) {
-                req_str += '?';
-                req_str += req.query_raw;
-
-            } else {
-
-                unparse_query(req.queries, req_str);
-            }
-
-            req_str += poison;
-
-            req_str += " HTTP/1.1\r\nHost: begun.ru\r\n\r\n";
-        }
 
 	m_sock << req_str;
     }
@@ -295,11 +280,10 @@ public:
     using client::fields_t;
     using client::send;
 
-    bool m_true_http;
+    serialized_client(bool) : client(false) {}
 
-    serialized_client(const std::string& h, int p, int rtimeout = 0, int stimeout = 0, bool truehttp = false) : 
-        client(h, p, rtimeout, stimeout), 
-        m_true_http(truehttp) {}
+    serialized_client(const std::string& h, int p, int rtimeout = 0, int stimeout = 0) :
+        client(h, p, rtimeout, stimeout) {}
 
     template <typename T>
     void send_get_serialized(const request& req, T& out) {
@@ -339,7 +323,7 @@ public:
 };
 
 
-struct raw_serialized_client : protected serialized_client {
+struct raw_serialized_client : public serialized_client {
 
 public:
 
@@ -352,8 +336,9 @@ public:
 
     using client::send;
 
-    raw_serialized_client(const std::string& h, int p, int rtimeout = 0, int stimeout = 0, bool truehttp = false) : 
-        serialized_client(h, p, rtimeout, stimeout, truehttp) {}
+    raw_serialized_client(bool) : serialized_client(false) {}
+    raw_serialized_client(const std::string& h, int p, int rtimeout = 0, int stimeout = 0) :
+        serialized_client(h, p, rtimeout, stimeout) {}
 
     void send_header(const request& req) {
         fields_t fields;
@@ -371,6 +356,12 @@ public:
         send_get_serialized_head_(req, fields);
     }
     
+    void send_header(const std::string& req, fields_t& fields) {
+        m_sock << req;
+
+        send_get_serialized_head_2_(fields);
+    }
+
 };
 
 
@@ -385,8 +376,8 @@ public:
     using client::m_host;
     using client::m_port;
 
-    serialized_post_client(const std::string& h, int p, int rtimeout = 0, int stimeout = 0, bool truehttp = false) : 
-        raw_serialized_client(h, p, rtimeout, stimeout, truehttp) {}
+    serialized_post_client(const std::string& h, int p, int rtimeout = 0, int stimeout = 0) :
+        raw_serialized_client(h, p, rtimeout, stimeout) {}
 
     template <typename T>
     void send_serialized(request& req, const T& out) {
@@ -440,8 +431,8 @@ public:
     using serialized_post_client::send_serialized;
     using serialized_post_client::send_serialized_n;
 
-    full_serialization_client(const std::string& h, int p, int rtimeout = 0, int stimeout = 0, bool truehttp = false) : 
-        serialized_post_client(h, p, rtimeout, stimeout, truehttp) {}
+    full_serialization_client(const std::string& h, int p, int rtimeout = 0, int stimeout = 0) :
+        serialized_post_client(h, p, rtimeout, stimeout) {}
 
     template <typename T, typename F>
     void send_serialized_f(request& req, const T& out, F f) {
@@ -478,42 +469,44 @@ struct http1_1 {
     typedef persistent_client_<CLIENT> client;
 
 private:
-    std::map<httpd::address, std::list<client> > connects;
-    boost::mutex lock;
+    std::map<address, std::list<client> > connects;
+    boost::mutex m_lock;
 
 public:
-
     unsigned int rcv_timeout;
     unsigned int snd_timeout;
 
-    unsigned int stat_size;
+    unsigned int m_pool_size;
 
-    http1_1(unsigned int r = 0, unsigned int s = 0) : rcv_timeout(r), snd_timeout(s),
-                                                      stat_size(0) {}
+    http1_1(unsigned int r = 0, unsigned int s = 0)
+            : rcv_timeout(r)
+            , snd_timeout(s)
+            , m_pool_size(0) { }
 
-    client get(const httpd::address& a, unsigned int& sc, unsigned int& ss, 
+    client get(const address& a, unsigned int& stat_connects_count, unsigned int& stat_pool_size,
                int rtimeout, int stimeout) {
 
-        boost::mutex::scoped_lock l(lock);
+        client ret;
 
-        typename std::map<httpd::address, std::list<client> >::iterator i = connects.find(a);
+        {
+            boost::mutex::scoped_lock lock(m_lock);
 
-        if (i == connects.end() || i->second.empty()) {
-            l.unlock();
+            auto it = connects.find(a);
+            if (it != connects.end() && !(it->second.empty())) {
+                ret = it->second.front();
+                it->second.pop_front();
 
-            client ret(a.host, a.port, rtimeout, stimeout);
-
-            lf::atomic_inc( &sc );
-
-            lf::cas( &ss, ss, stat_size );
-            return ret;
-
+                lf::atomic_dec(&m_pool_size);
+                lf::cas(&stat_pool_size, stat_pool_size, m_pool_size);
         } else {
-            client ret = i->second.front();
-            i->second.pop_front();
-            stat_size--;
-            lf::cas( &ss, ss, stat_size );
+                lf::atomic_inc(&stat_connects_count); // На это число никто не смотрит. Решили убрать из статы или в RPS перевести
+                lf::cas(&stat_pool_size, stat_pool_size, m_pool_size);
+            }
+        }
 
+        if (!ret) {
+            return client(a.host, a.port, rtimeout, stimeout);
+        } else {
             try {
                 ret.m_sock->m_obj->check_peer_state();
                 return ret;
@@ -521,21 +514,18 @@ public:
             } catch (const std::runtime_error& e) {
 
                 logger::log(logger::DEBUG) << "bad client in pool found: " << e.what();
+                lf::atomic_inc( &stat_connects_count );
 
-                l.unlock();
-                client ret(a.host, a.port, rtimeout, stimeout);
-                lf::atomic_inc( &sc );
-
-                return ret;
+                return client(a.host, a.port, rtimeout, stimeout);
             }
         }
     }
 
-    client get(const httpd::address& a, unsigned int& sc, unsigned int& ss) {
-        return get(a, sc, ss, rcv_timeout, snd_timeout);
+    client get(const address& a, unsigned int& stat_connects_count, unsigned int& stat_pool_size) {
+        return get(a, stat_connects_count, stat_pool_size, rcv_timeout, snd_timeout);
     }
 
-    void put(const httpd::address& a, client c, const typename CLIENT::fields_t& fields) {
+    void put(const address& a, client c, const typename CLIENT::fields_t& fields) {
         if (c) {
 
             typename CLIENT::fields_t::const_iterator i = fields.find("connection");
@@ -549,9 +539,12 @@ public:
                 return;
             }
 
-            boost::mutex::scoped_lock l(lock);
+            {
+                boost::mutex::scoped_lock lock(m_lock);
+
             connects[a].push_back(c);
-            stat_size++;
+                lf::atomic_inc(&m_pool_size);
+            }
         }
     }
 };

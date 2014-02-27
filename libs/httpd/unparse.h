@@ -43,15 +43,22 @@ inline std::string quote(const std::string& s) {
 }
 
 
-inline void unparse_query(const std::map<std::string,std::vector<std::string> >& q, std::string& out) {
+inline void unparse_query(const std::map<std::string,std::vector<std::string> >& q, std::string& out, bool dropfirst = false) {
+
+    bool first = true;
 
     for (std::map<std::string,std::vector<std::string> >::const_iterator i = q.begin(); 
 	 i != q.end(); ++i) {
 		
 	for (std::vector<std::string>::const_iterator j = i->second.begin(); j != i->second.end(); ++j) {
 		
-	    if (i == q.begin()) {
+            if (first) {
+                if (!dropfirst) {
 		out += '?';
+                }
+
+                first = false;
+
 	    } else {
 		out += '&';
 	    }

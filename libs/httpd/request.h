@@ -1,6 +1,7 @@
 #ifndef __HTTPD_REQUEST_H
 #define __HTTPD_REQUEST_H
 
+#include <algorithm>
 
 namespace httpd {
 
@@ -85,12 +86,25 @@ struct request {
 
     std::string empty;
 
-    request() : method("GET"), version("HTTP/1.1") {}
+    request(const std::string& host = "example.com") : method("GET"), version("HTTP/1.1")
+    {
+        fields["host"].push_back(host);
+    }
 
     const std::string& get_query(const std::string& f) const {
 	std::map<std::string,std::vector<std::string> >::const_iterator i = queries.find(f);
 	if (i != queries.end() && i->second.size() > 0) return i->second[0];
 	return empty;
+    }
+
+    const size_t get_query(const std::string& f, std::vector<std::string>& values) const
+    {
+        queries_::const_iterator i = queries.find(f);
+        if (i != queries.end() && i->second.size() > 0) {
+            values = i->second;
+            return values.size();
+        }
+        return 0;
     }
 
     void set_query(const std::string& k, const std::string& v) {
@@ -119,8 +133,11 @@ struct request {
     }
 
     void set_field(const std::string& k, const std::string& v) {
+        std::string key;
+        std::transform(k.begin(), k.end(), std::back_inserter(key), ::tolower );
+
 	fields_raw.clear();
-	fields[k].push_back(v);
+        fields[key].push_back(v);
     }
 
     void get_cookies(std::map<std::string,std::string>& out) const {

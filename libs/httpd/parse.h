@@ -1,6 +1,9 @@
 #ifndef __HTTPD_PARSE_H
 #define __HTTPD_PARSE_H
 
+#include <string>
+#include <strings.h>
+
 #include "httpd/request.h"
 
 namespace httpd {
@@ -91,6 +94,24 @@ inline std::string unquote(const std::string& s) {
 }
 
 
+inline std::string get_domain_from_url(const std::string& url) {
+
+    size_t i = 0;
+
+
+    if (url.size() > 7 && ::strncasecmp(url.c_str(), "http://", 7) == 0) {
+        i = 7;
+    } else if (url.size() > 8 && ::strncasecmp(url.c_str(), "https://", 8) == 0) {
+        i = 8;
+    }
+
+    size_t l = 0;
+    for (size_t j = i; url[j] != '\0'; ++j, ++l) {
+        if (url[j] == '/' || url[j] == '?') break;
+    }
+
+    return url.substr(i, l);
+}
 
 template <typename BUF>
 inline void parse_query(BUF sock, request& out, int nlen = -1) {
@@ -122,7 +143,7 @@ inline void parse_query(BUF sock, request& out, int nlen = -1) {
 	}
 
 	if (c == '&') {
-	    if (key.size() > 0 && val.size() > 0) {
+            if (key.size() > 0) {
 		out.queries[key].push_back(val);
 	    }
 	    key.clear();
@@ -156,7 +177,7 @@ inline void parse_query(BUF sock, request& out, int nlen = -1) {
 	else if (state == VAL) val += c;
     }
 
-    if (key.size() > 0 && val.size() > 0) {
+    if (key.size() > 0 && state == VAL) {
 	out.queries[key].push_back(val);
     }
 }
@@ -293,7 +314,11 @@ inline void parse_request_fields(BUF sock, request& out) {
         if (i->first == "date" || 
             i->first == "if-modified-since" ||
             i->first == "if-unmodified-since" ||
-            i->first == "if-range") {
+            i->first == "if-range" ||
+            i->first == "set-cookie" ||
+            i->first == "expires" ||
+            i->first == "last-modified" ||
+            i->first == "user-agent") { // В некоторых user-agent бывают запятые
 
             continue;
         }

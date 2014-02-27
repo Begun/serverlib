@@ -4,7 +4,14 @@
 
 #include "util/webtime.h"
 #include "httpd/unparse.h"
+#include "httpd/request.h"
+#include "files/files_format.h"
 #include "files/serialization_save.h"
+#include "clientserver/clientserver.h"
+
+#include <string>
+#include <vector>
+#include <map>
 
 
 namespace httpd {
@@ -67,7 +74,7 @@ struct headers {
     template <typename T>
     void set_cookie(const std::string& k, const T& v, 
 		    time_t expires,
-		    const std::string& domain=".begun.ru",
+		    const std::string& domain=".example.com",
 		    const std::string& path="/") {
 
 	files::fmt ff;
@@ -150,13 +157,9 @@ struct responder : public response::headers, public files::fmt {
     ~responder() {
         try {
         	send();
-        }
-        catch (std::exception& e) {
-            std::cerr << "ERROR: Could not send() in ~responder() : " << e.what() << std::endl;
-        }
-        catch (...) {
-            std::cerr << "ERROR: Could not send() in ~responder() : unknown error" << std::endl;
-        }
+
+        // Игноририем ошибки отправки
+        } catch (...) { }
     }
 
     bool should_close;
